@@ -1,0 +1,71 @@
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+# This workflow will build a package using Gradle and then publish it to GitHub packages when a release is created
+# For more information see: https://github.com/actions/setup-java/blob/main/docs/advanced-usage.md#Publishing-using-gradle
+
+name: WSS Server CI/CD
+
+on:
+  push:
+    branches: ["dev"]
+env:
+  PREVIOUS_VERSION : 0.0.0
+  APP_VERSION: 0.1.0
+  WSS_CONTAINER_NAME: wss-server
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      
+
+    steps:
+
+    - name: Login to DockerHub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
+        
+    - name: Docker build and push
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        file: ./Dockerfile
+        push: true
+        tags: ${{ secrets.WSS_IMG_NAME }}:${{ env.APP_VERSION }}
+      
+    - name: docker build and push
+      run: |
+        docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
+        docker build -t ${{ secrets.DOCKER_REPO }}:$APP_VERSION .
+        docker push ${{ secrets.DOCKER_REPO }}:$APP_VERSION
+    - name: deploy step 1
+      uses: appleboy/ssh-action@v0.1.6
+      with:
+        host: ${{ secrets.WSS_HOST_DEV }}
+        username: ${{ secrets.WSS_USERNAME }}
+        password: ${{ secrets.WSS_PASSWORD }}
+        port: ${{ secrets.WSS_SSH_PORT }}
+        script: |
+          sudo docker stop ${{ WSS_CONTAINER_NAME }}
+          sudo docker rm ${{ WSS_CONTAINER_NAME }}
+          
+    - name: deploy step 2
+      uses: appleboy/ssh-action@v0.1.6
+      with:
+        host: ${{ secrets.WSS_HOST_DEV }}
+        username: ${{ secrets.WSS_USERNAME }}
+        password: ${{ secrets.WSS_PASSWORD }}
+        port: ${{ secrets.WSS_SSH_PORT }}
+        envs: WSS_CONTAINER_NAME, APP_VERSIOIN
+        scripts: |
+          sudo docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
+          sudo docker rmi image $(sudo docker images -q --filter "reference=${{ secrets.WSS_DOCKER_REPO }}")
+          sudo docker pull ${{ secrets.WSS_DOCKER_REPO }}:$APP_VERSION
+          sudo docker pull ${{ secrets.WSS_DOCKER_REPO }}:$APP_VERSION
+          sudo docker run -d -p 5000:5000 -e USE_PROFILE=dev --name $WSS_CONTAINER_NAME ${{ secrets.WSS_DOCKER_REPO }}:$APP_VERSION 
