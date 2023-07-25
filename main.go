@@ -3,13 +3,15 @@ package main
 import (
 	"encoding/json"
 	"log"
+	"meopin-top-wss/subscribe"
 
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 )
 
+// Payload is the data structure for the websocket
 type Payload struct {
-	ChannelID   string `json:"channel_id"`
+	PaperID     string `json:"paper_id"`
 	UserID      string `json:"user_id"`
 	Message     string `json:"message"`
 	MessageType string `json:"message_type"`
@@ -22,95 +24,53 @@ func main() {
 		return c.SendString("pong")
 	})
 
-	app.Use("/ws", func(c *fiber.Ctx) error {
-		if websocket.IsWebSocketUpgrade(c) {
-			c.Locals("allowed", true)
-			return c.Next()
+	app.Use("/ws", func(ctx *fiber.Ctx) error {
+		if websocket.IsWebSocketUpgrade(ctx) {
+			ctx.Locals("allowed", true)
+			return ctx.Next()
 		}
 		return fiber.ErrUpgradeRequired
 	})
 
-	app.Get("/ws/:channel_id", websocket.New(func(c *websocket.Conn) {
-		channelID := c.Params("channel_id")
-		subscribe(channelID)
+	app.Get("/ws/:paper_id", websocket.New(func(conn *websocket.Conn) {
+		paperID := conn.Params("channel_id")
+		subscriber := subscribe.GetInstance()
+		// add connection to channel
+		subscriber.Add(paperID, conn)
 
 		defer func() {
-			unsubscribe(channelID)
+			// remove connection from channel
+			subscriber.Remove(paperID, conn)
+			// close websocket connection
+			conn.Close()
 		}()
 
-		// Get local value
-		allowed := c.Locals("allowed").(bool)
-
-		log.Println(channelID, allowed)
-
-		go func() {
-			// when broadcast is called get message from channel and send to client
-			for {
-				msg := <-channel
-
-				jsonMsg, err := json.Marshal(msg)
-				if err != nil {
-					log.Println("marshal:", err)
-					break
-				}
-
-				// send message to client
-				err = c.WriteMessage(websocket.TextMessage, jsonMsg)
-				if err != nil {
-					log.Println("write:", err)
-					break
-				}
-
-				log.Printf("sent: %s\n", jsonMsg)
-			}
-		}()
+		// Get local value: 필요 없어지면 삭제 예정
+		allowed := conn.Locals("allowed").(bool)
+		log.Println(paperID, allowed)
 
 		for {
-			mt, msg, err := c.ReadMessage()
+			// wait for new message
+			_, msg, err := conn.ReadMessage()
 			if err != nil {
-				log.Println("read:", err)
+				log.Println("read message failed:", err)
 				break
 			}
 
 			var payload Payload
 			err = json.Unmarshal(msg, &payload)
 			if err != nil {
-				log.Println("unmarshal:", err)
+				log.Println("unmarshal failed:", err)
 				break
 			}
 
-			// update channel with new message
-			updateChannel(channelID, payload)
-
-			// Send message to all subscribers
-			broadcast(channelID, payload)
+			go subscriber.Broadcast(paperID, msg)
 
 			log.Printf("recv: %s\n", msg)
-			err = c.WriteMessage(mt, msg)
-			if err != nil {
-				log.Println("write:", err)
-				break
-			}
 		}
 
 	}))
 
 	log.Fatal(app.Listen(":3000"))
 	// Access ws://localhost:3000/ws/{channel_id}
-}
-
-func unsubscribe(channelID string) {
-	panic("unimplemented")
-}
-
-func broadcast(channelID string, payload Payload) {
-	panic("unimplemented")
-}
-
-func updateChannel(channelID string, payload Payload) {
-	panic("unimplemented")
-}
-
-func subscribe(channelID string) {
-	panic("unimplemented")
 }
