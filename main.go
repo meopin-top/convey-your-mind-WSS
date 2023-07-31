@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"log"
+	"meopin-top-wss/db"
 	"meopin-top-wss/subscribe"
 
 	"github.com/gofiber/contrib/websocket"
@@ -57,6 +58,8 @@ func main() {
 				break
 			}
 
+			log.Printf("recv: %s\n", msg)
+
 			var payload Payload
 			err = json.Unmarshal(msg, &payload)
 			if err != nil {
@@ -64,9 +67,24 @@ func main() {
 				break
 			}
 
+			// push message to redis
+			db := db.GetInstance()
+			err = db.GetAndAdd(paperID, string(msg))
+			if err != nil {
+				log.Println("publish failed:", err)
+				break
+			}
+
+			strMsg, err := db.Get(paperID)
+			if err != nil {
+				log.Println("get failed:", err)
+				break
+			}
+
+			msg = []byte(strMsg)
 			go subscriber.Broadcast(paperID, msg)
 
-			log.Printf("recv: %s\n", msg)
+			log.Printf("send: %s\n", msg)
 		}
 
 	}))
