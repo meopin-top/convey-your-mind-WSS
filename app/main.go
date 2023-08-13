@@ -3,8 +3,8 @@ package main
 import (
 	"encoding/json"
 	"log"
-	"meopin-top-wss/db"
-	"meopin-top-wss/subscribe"
+	"meopin-top-wss/domain/singleton"
+	"meopin-top-wss/meopin/repository/redis"
 
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
@@ -35,7 +35,7 @@ func main() {
 
 	app.Get("/ws/:paper_id", websocket.New(func(conn *websocket.Conn) {
 		paperID := conn.Params("channel_id")
-		subscriber := subscribe.GetInstance()
+		subscriber := singleton.GetBroakerInstance()
 		// add connection to channel
 		subscriber.Add(paperID, conn)
 
@@ -68,7 +68,7 @@ func main() {
 			}
 
 			// push message to redis
-			db := db.GetInstance()
+			db := redis.GetInstance()
 			err = db.GetAndAdd(paperID, string(msg))
 			if err != nil {
 				log.Println("publish failed:", err)
