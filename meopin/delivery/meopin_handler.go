@@ -20,8 +20,10 @@ func NewWsHandler(c *fiber.App, paperUsecase domain.PaperUsecase) {
 		paperUsecase: paperUsecase,
 	}
 
+	_middleware := middleware.InitMiddleware()
+
 	c.Get("/ping", handler.Ping)
-	c.Use("/ws", middleware.InitMiddleware())
+	c.Use("/ws", _middleware.CheckWebsocketUpgrade)
 	c.Get("/ws/:paper_id", websocket.New(handler.WebsocketConnection))
 }
 

@@ -13,10 +13,10 @@ type paperUsecase struct {
 }
 
 // NewPaperUsecase is the constructor for paperUsecase
-func NewPaperUsecase(paperRepo domain.PaperRepository, broaker singleton.Broaker) domain.PaperUsecase {
+func NewPaperUsecase(paperRepo domain.PaperRepository) domain.PaperUsecase {
 	return &paperUsecase{
 		paperRepo: paperRepo,
-		broaker:   broaker,
+		broaker:   *singleton.GetBroakerInstance(),
 	}
 }
 
@@ -28,13 +28,13 @@ func (p *paperUsecase) Subscribe(paperID string, conn *websocket.Conn) error {
 func (p *paperUsecase) ReceiveMessage(payload domain.Payload) error {
 	db := p.paperRepo
 	// Get paper from redis
-	paper, err := db.Get(payload.PaperID)
+	paper, err := db.Get(payload.ProjectID)
 	if err != nil {
 		return err
 	}
 
 	// Add message to paper
-	err = db.GetAndAdd(payload.PaperID, paper)
+	err = db.Add(payload.ProjectID, paper)
 	if err != nil {
 		return err
 	}
@@ -45,7 +45,7 @@ func (p *paperUsecase) ReceiveMessage(payload domain.Payload) error {
 func (p *paperUsecase) GetData(payload domain.Payload) (string, error) {
 	db := p.paperRepo
 	// Get paper from redis
-	paper, err := db.Get(payload.PaperID)
+	paper, err := db.Get(payload.ProjectID)
 	if err != nil {
 		return "", err
 	}
@@ -54,7 +54,6 @@ func (p *paperUsecase) GetData(payload domain.Payload) (string, error) {
 }
 
 func (p *paperUsecase) BroadcastMessage(paperID string, msg string) error {
-
 	p.broaker.Broadcast(paperID, []byte(msg))
 	return nil
 }

@@ -1,12 +1,11 @@
 package main
 
 import (
-	"encoding/json"
 	"log"
-	"meopin-top-wss/domain/singleton"
+	"meopin-top-wss/meopin/delivery"
 	"meopin-top-wss/meopin/repository/redis"
+	"meopin-top-wss/meopin/usecase"
 
-	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -21,74 +20,13 @@ type Payload struct {
 func main() {
 	app := fiber.New()
 
-	app.Get("/ping", func(c *fiber.Ctx) error {
-		return c.SendString("pong")
-	})
+	// middleware := middleware.InitMiddleware()
 
-	app.Use("/ws", func(ctx *fiber.Ctx) error {
-		if websocket.IsWebSocketUpgrade(ctx) {
-			ctx.Locals("allowed", true)
-			return ctx.Next()
-		}
-		return fiber.ErrUpgradeRequired
-	})
+	// app.Use("/ws", middleware.CheckWebsocketUpgrade)
 
-	app.Get("/ws/:paper_id", websocket.New(func(conn *websocket.Conn) {
-		paperID := conn.Params("channel_id")
-		subscriber := singleton.GetBroakerInstance()
-		// add connection to channel
-		subscriber.Add(paperID, conn)
-
-		defer func() {
-			// remove connection from channel
-			subscriber.Remove(paperID, conn)
-			// close websocket connection
-			conn.Close()
-		}()
-
-		// Get local value: 필요 없어지면 삭제 예정
-		allowed := conn.Locals("allowed").(bool)
-		log.Println(paperID, allowed)
-
-		for {
-			// wait for new message
-			_, msg, err := conn.ReadMessage()
-			if err != nil {
-				log.Println("read message failed:", err)
-				break
-			}
-
-			log.Printf("recv: %s\n", msg)
-
-			var payload Payload
-			err = json.Unmarshal(msg, &payload)
-			if err != nil {
-				log.Println("unmarshal failed:", err)
-				break
-			}
-
-			// push message to redis
-			db := redis.GetInstance()
-			err = db.GetAndAdd(paperID, string(msg))
-			if err != nil {
-				log.Println("publish failed:", err)
-				break
-			}
-
-			strMsg, err := db.Get(paperID)
-			if err != nil {
-				log.Println("get failed:", err)
-				break
-			}
-
-			msg = []byte(strMsg)
-			go subscriber.Broadcast(paperID, msg)
-
-			log.Printf("send: %s\n", msg)
-		}
-
-	}))
-
+	paperRepo := redis.GetInstance()
+	paperUsecase := usecase.NewPaperUsecase(paperRepo)
+	delivery.NewWsHandler(app, paperUsecase)
 	log.Fatal(app.Listen(":3000"))
 	// Access ws://localhost:3000/ws/{channel_id}
 }
