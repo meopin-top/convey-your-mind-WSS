@@ -53,8 +53,8 @@ func (db *Database) Get(key string) (string, error) {
 	return val, nil
 }
 
-// GetAndAdd returns the value of the key and adds the value to the key
-func (db *Database) GetAndAdd(key string, value string) error {
+// Add returns the value of the key and adds the value to the key
+func (db *Database) Add(key string, value string) error {
 	val, err := db.Client.Get(Ctx, key).Result()
 	if err != nil {
 		return err

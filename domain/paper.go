@@ -7,7 +7,7 @@ type PaperRepository interface {
 	// Get returns the paper with the given id
 	Get(id string) (string, error)
 	// GetAndAdd returns the paper with the given id and adds the value to the key
-	GetAndAdd(id string, value string) error
+	Add(id string, value string) error
 }
 
 // PaperUsecase is the interface for the paper usecase
