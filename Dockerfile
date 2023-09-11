@@ -1,8 +1,12 @@
 # Build stage
 FROM golang:1.20.5-alpine3.18 AS builder
 WORKDIR /app
-COPY . .
-RUN go build -o wss main.go
+COPY go.mod ./
+COPY go.sum ./
+
+COPY . ./
+RUN ls
+RUN go build -o wss ./app/main.go
 
 
 # Run stage
