@@ -1,7 +1,6 @@
 package delivery
 
 import (
-	"encoding/json"
 	"log"
 	"meopin-top-wss/domain"
 	"meopin-top-wss/meopin/delivery/middleware"
@@ -25,26 +24,43 @@ func NewWsHandler(c *fiber.App, paperUsecase domain.PaperUsecase) {
 	c.Get("/ping", handler.Ping)
 	c.Use("/ws", _middleware.CheckWebsocketUpgrade)
 	c.Get("/ws/:paper_id", websocket.New(handler.WebsocketConnection))
+	c.Get("/dummy", handler.CreateDummyProject)
 }
 
 func (m *wsHandler) Ping(c *fiber.Ctx) error {
 	return c.SendString("pong")
 }
 
+func (m *wsHandler) CreateDummyProject(c *fiber.Ctx) error {
+	m.paperUsecase.CreateDummyProject()
+
+	return nil
+}
+
 func (m *wsHandler) WebsocketConnection(conn *websocket.Conn) {
 	paperID := conn.Params("channel_id")
+	log.Printf("new websocket connection: %s\n")
 	m.paperUsecase.Subscribe(paperID, conn)
 
+	// remove connection from channel when connection is closed
 	defer func() {
-		// remove connection from channel
 		m.paperUsecase.Remove(paperID, conn)
-		// close websocket connection
 		conn.Close()
 	}()
 
 	// Get local value, 필요 없어지면 삭제 예정
 	allowed := conn.Locals("allowed").(bool)
 	log.Println(paperID, allowed)
+
+	// 최초 연결 시 프로젝트 데이터 수신
+	project, err := m.paperUsecase.GetProject(paperID)
+	if err != nil {
+		log.Println("get project failed:", err)
+		return
+	}
+
+	// send project data to client
+	err = conn.WriteMessage(websocket.TextMessage, []byte(project))
 
 	var payload domain.Payload
 	for {
@@ -54,32 +70,11 @@ func (m *wsHandler) WebsocketConnection(conn *websocket.Conn) {
 			log.Println("read message failed:", err)
 			break
 		}
+		log.Println("receive message:", string(msg))
 
-		log.Printf("recv: %s\n", msg)
-
-		err = json.Unmarshal(msg, &payload)
-		if err != nil {
-			log.Println("unmarshal failed:", err)
-			break
-		}
-
-		// push message to redis
-		m.paperUsecase.ReceiveMessage(payload)
-
-		if err != nil {
-			log.Println("publish failed:", err)
-			break
-		}
-
-		strMsg, err := m.paperUsecase.GetData(payload)
-
-		if err != nil {
-			log.Println("get data failed:", err)
-			break
-		}
-		m.paperUsecase.BroadcastMessage(paperID, strMsg)
-
-		log.Printf("send: %s\n", msg)
+		go m.paperUsecase.PushData(payload) // fire and forget
+		m.paperUsecase.BroadcastMessage(paperID, string(msg))
+		log.Printf("broadcast message: %s\n", msg)
 	}
 	return
 }
