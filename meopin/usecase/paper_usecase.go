@@ -36,7 +36,7 @@ func (p *paperUsecase) CreateDummyProject() error {
 	db := p.paperRepo
 	dummy := domain.Project{
 		Status:    "active",
-		ProjectID: "project_id",
+		ProjectID: "abc",
 		Contents: []domain.Content{
 			{
 				UserID:      "byungwook",
@@ -61,9 +61,19 @@ func (p *paperUsecase) CreateDummyProject() error {
 }
 
 func (p *paperUsecase) PushData(payload domain.Payload) error {
+	// https://stackoverflow.com/questions/46536234/how-to-parse-json-in-golang-without-unmarshaling-twice
+
 	db := p.paperRepo
 	var lock string
 	var err error
+
+	defer func() {
+		if err := db.DecrLock(payload.ProjectID); err != nil {
+			log.Println("unlock failed:", err)
+			return
+		}
+	}()
+
 	// Redis Lock
 	for {
 		if lock, err = db.GetLock(payload.ProjectID); err != nil {
@@ -85,39 +95,47 @@ func (p *paperUsecase) PushData(payload domain.Payload) error {
 	if err != nil {
 		return err
 	}
+	log.Println("data loaded: " + paper)
 
 	// Processing paper data
+	// jsonMap := map[string]json.RawMessage{}
 	jsonMap := map[string]string{}
 
-	err = json.Unmarshal([]byte(paper), &jsonMap)
-	if err != nil {
+	if err = json.Unmarshal([]byte(paper), &jsonMap); err != nil {
+		log.Println("json unmarshal failed:", err)
 		return err
 	}
 
-	contents := jsonMap["Contents"]
+	log.Println("jsonMap: ", jsonMap)
+
+	contents := jsonMap["contents"]
 
 	contentsMap := map[string]string{}
-	err = json.Unmarshal([]byte(contents), &contentsMap)
-	if err != nil {
+
+	if err = json.Unmarshal([]byte(contents), &contentsMap); err != nil {
 		return err
 	}
 	v, _ := json.Marshal(payload.Content)
 	contentsMap[payload.Content.ContentID] = string(v)
 	v, _ = json.Marshal(contentsMap)
-	jsonMap["Contents"] = string(v)
+	jsonMap["contents"] = string(v)
 
 	jsonMapString, err := json.Marshal(jsonMap)
 	if err != nil {
+		log.Println("json marshal failed:", err)
 		return err
 	}
+
+	log.Println("data saved: " + string(jsonMapString))
 	// Set paper to redis
-	err = db.Set(payload.ProjectID, string(jsonMapString))
+	if err = db.Set(payload.ProjectID, string(jsonMapString)); err != nil {
+		log.Println("set failed:", err)
+		return err
+	}
+	// err = db.Set(payload.ProjectID, string(jsonMapString))
 
 	// Redis Unlock
-	if err = db.DecrLock(payload.ProjectID); err != nil {
-		log.Println("unlock failed:", err)
-		return err
-	}
+
 	return nil
 }
 

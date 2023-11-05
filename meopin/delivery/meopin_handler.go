@@ -1,6 +1,7 @@
 package delivery
 
 import (
+	"encoding/json"
 	"log"
 	"meopin-top-wss/domain"
 	"meopin-top-wss/meopin/delivery/middleware"
@@ -38,8 +39,8 @@ func (m *wsHandler) CreateDummyProject(c *fiber.Ctx) error {
 }
 
 func (m *wsHandler) WebsocketConnection(conn *websocket.Conn) {
-	paperID := conn.Params("channel_id")
-	log.Printf("new websocket connection: %s\n")
+	paperID := conn.Params("paper_id")
+	log.Printf("new websocket connection: %s\n", paperID)
 	m.paperUsecase.Subscribe(paperID, conn)
 
 	// remove connection from channel when connection is closed
@@ -71,6 +72,11 @@ func (m *wsHandler) WebsocketConnection(conn *websocket.Conn) {
 			break
 		}
 		log.Println("receive message:", string(msg))
+
+		if err = json.Unmarshal(msg, &payload); err != nil {
+			log.Println("unmarshal failed:", err)
+			break
+		}
 
 		go m.paperUsecase.PushData(payload) // fire and forget
 		m.paperUsecase.BroadcastMessage(paperID, string(msg))
