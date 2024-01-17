@@ -29,7 +29,7 @@ func GetInstance() *Database {
 	if instance == nil {
 		instance = &Database{
 			Client: redis.NewClient(&redis.Options{
-				Addr: "localhost:6379",
+				Addr: "host.docker.internal:6379",
 			}),
 		}
 	}
