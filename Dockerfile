@@ -16,5 +16,5 @@ COPY --from=builder /app/wss .
 # env 파일 있으면
 # COPY app.env .
 
-EXPOSE 3000
+EXPOSE 3010
 CMD [ "/app/wss" ]

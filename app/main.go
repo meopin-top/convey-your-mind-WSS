@@ -37,6 +37,6 @@ func main() {
 
 	data, _ := json.MarshalIndent(app.Stack(), "", "  ")
 	fmt.Println(string(data))
-	log.Fatal(app.Listen(":3000"))
-	// Access ws://localhost:3000/ws/{channel_id}
+	log.Fatal(app.Listen(":3010"))
+	// Access ws://localhost:3010/ws/{channel_id}
 }

@@ -12,7 +12,7 @@ $ docker run meopin-wss
 
 ## How to use
 
-1. `http://localhost:3000/ws/{project_id}`으로 웹소켓 연결
+1. `ws://localhost:3010/ws/{project_id}`으로 웹소켓 연결
 2. 연결이 성립되면 현재 프로젝트의 데이터를 불러옴.
 ```json
 {
