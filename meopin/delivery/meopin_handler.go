@@ -57,6 +57,7 @@ func (m *wsHandler) WebsocketConnection(conn *websocket.Conn) {
 	project, err := m.paperUsecase.GetProject(paperID)
 	if err != nil {
 		log.Println("get project failed:", err)
+		conn.WriteMessage(websocket.TextMessage, []byte("get project failed: "+err.Error()))
 		return
 	}
 
